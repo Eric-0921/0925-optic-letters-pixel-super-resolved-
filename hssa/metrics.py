@@ -16,9 +16,9 @@ def align(rec, gt, crop=None, upsample=20):
     """Sub-pixel translate `rec` onto `gt` using amplitude (or phase) correlation."""
     a = np.abs(rec)
     g = np.abs(gt)
-    if g.std() < 1e-3:  # pure phase object: register on phase
-        a = np.angle(rec * np.conj(np.mean(rec)))
-        g = np.angle(gt)
+    if g.std() < 1e-3:  # pure phase object: register the unit-modulus complex fields
+        a = rec / (np.abs(rec) + 1e-12)            # immune to phase wrapping
+        g = gt / (np.abs(gt) + 1e-12)
     if crop is not None:
         a, g = a[crop], g[crop]
     shift, _, _ = phase_cross_correlation(g - g.mean(), a - a.mean(), upsample_factor=upsample,
@@ -32,25 +32,43 @@ def amplitude_scale(rec, gt, roi):
     return float(np.median(np.abs(rec)[bg])) if bg.any() else float(np.median(np.abs(rec)[roi]))
 
 
-def evaluate_usaf(rec_win, gt_win, dx, origin, layout, roi_margin=10.0, thresh=0.1):
-    """Amplitude MSE on the pattern ROI and USAF resolution.
+def _bbox_slice(bbox, origin, dx, shape):
+    x0, y0, x1, y1 = bbox
+    r0, r1 = int((y0 - origin[0]) / dx), int(np.ceil((y1 - origin[0]) / dx))
+    c0, c1 = int((x0 - origin[1]) / dx), int(np.ceil((x1 - origin[1]) / dx))
+    return (slice(max(r0, 0), min(r1, shape[0])), slice(max(c0, 0), min(c1, shape[1])))
 
-    rec_win, gt_win: HR windows (same grid); origin: layout coordinate (um) of
-    the top-left pixel edge of the window.
-    """
+
+def usaf_scores(amp, gt_win, dx, origin, layout, groups=(7, 8, 9), thresh=0.1):
+    """MSE and resolution on the central groups of an aligned, normalised amplitude."""
+    from .usaf import groups_bbox
+    sl = _bbox_slice(groups_bbox(layout, groups), origin, dx, amp.shape)
+    mse = float(np.mean((amp[sl] - np.abs(gt_win)[sl]) ** 2))
+    table, finest = resolution_report(amp, dx, origin, layout, thresh=thresh, groups=groups)
+    return {"mse": mse, "finest": finest,
+            "contrast": {f"{g}-{e}": round(v, 4) for (g, e), v in table.items()}}
+
+
+def evaluate_usaf(rec_win, gt_win, dx, origin, layout, groups=(7, 8, 9), thresh=0.1):
+    """Align on the whole pattern, normalise the clear-glass amplitude to 1, then
+    score MSE and resolution on the central groups (the paper's central region)."""
     x0, y0, x1, y1 = layout.bbox
-    r0 = int((y0 - roi_margin - origin[0]) / dx); r1 = int((y1 + roi_margin - origin[0]) / dx)
-    c0 = int((x0 - roi_margin - origin[1]) / dx); c1 = int((x1 + roi_margin - origin[1]) / dx)
-    sl = (slice(max(r0, 0), r1), slice(max(c0, 0), c1))
+    sl = _bbox_slice((x0 - 10, y0 - 10, x1 + 10, y1 + 10), origin, dx, gt_win.shape)
     rec_al, shift = align(rec_win, gt_win, crop=sl)
     roi = np.zeros(gt_win.shape, bool)
     roi[sl] = True
-    s = amplitude_scale(rec_al, gt_win, roi)
-    amp = np.abs(rec_al) / s
-    mse = float(np.mean((amp[sl] - np.abs(gt_win)[sl]) ** 2))
-    table, finest = resolution_report(amp, dx, origin, layout, thresh=thresh)
-    return {"mse": mse, "finest": finest, "contrast": {f"{g}-{e}": round(v, 4) for (g, e), v in table.items()},
-            "align_shift": shift, "amp": amp, "slice": sl}
+    amp = np.abs(rec_al) / amplitude_scale(rec_al, gt_win, roi)
+    out = usaf_scores(amp, gt_win, dx, origin, layout, groups, thresh)
+    out.update({"align_shift": shift, "amp": amp})
+    return out
+
+
+def _highpass(u, sigma_px=5.0 / 0.67):
+    """Remove phase variations coarser than ~10 um (Gaussian, sigma = 5 um)."""
+    from scipy.ndimage import gaussian_filter
+    z = u / (np.abs(u) + 1e-12)
+    low = gaussian_filter(z.real, sigma_px) + 1j * gaussian_filter(z.imag, sigma_px)
+    return z * np.conj(low) / (np.abs(low) + 1e-12)
 
 
 def evaluate_phase(rec_win, gt_win, roi_slice):
@@ -67,6 +85,8 @@ def evaluate_phase(rec_win, gt_win, roi_slice):
     err = np.angle(r * rot * np.conj(g))
     gph = np.angle(g)
     rng = float(gph.max() - gph.min()) + 1e-12
+    hp_err = np.angle(_highpass(r * rot) * np.conj(_highpass(g)))
     return {"phase_rmse": float(np.sqrt(np.mean(err ** 2))),
             "phase_nmse": float(np.mean(err ** 2) / rng ** 2),
+            "phase_rmse_detail": float(np.sqrt(np.mean(hp_err ** 2))),
             "phase": np.angle(rec_al * rot), "align_shift": shift}

@@ -94,6 +94,13 @@ def render(layout, shape, dx, origin, bar_t=0.0):
     return 1.0 - opaque * (1.0 - bar_t)
 
 
+def groups_bbox(layout, groups, margin=6.0):
+    """(x0, y0, x1, y1) of the bar sets of the given groups, with a margin (um)."""
+    sets = [b for b in layout.sets if b.group in groups]
+    return (min(b.x0 for b in sets) - margin, min(b.y0 for b in sets) - margin,
+            max(b.x0 + 5 * b.w for b in sets) + margin, max(b.y0 + 5 * b.w for b in sets) + margin)
+
+
 def element_contrast(img, dx, origin, bs, oversample=4):
     """Michelson contrast of the two gaps against their neighbouring bars.
 
@@ -130,7 +137,7 @@ def element_contrast(img, dx, origin, bs, oversample=4):
     return float(min(c1, c2))
 
 
-def resolution_report(img, dx, origin, layout, thresh=0.1):
+def resolution_report(img, dx, origin, layout, thresh=0.1, groups=None):
     """Per-element contrast (min over both orientations) and finest resolved element.
 
     The finest resolved element is the last one, in order of increasing
@@ -138,6 +145,8 @@ def resolution_report(img, dx, origin, layout, thresh=0.1):
     """
     table = {}
     for bs in layout.sets:
+        if groups is not None and bs.group not in groups:
+            continue
         c = element_contrast(img, dx, origin, bs)
         key = (bs.group, bs.element)
         table[key] = min(table.get(key, np.inf), c)

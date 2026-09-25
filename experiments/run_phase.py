@@ -53,10 +53,13 @@ def main():
             r = reconstruct(rfs, method=method, iters=args.iters)
             ev = metrics.evaluate_phase(r["x"][r["ref_window"]], gtw, roi)
             results[f"{name}/{label}"] = {"phase_rmse_rad": ev["phase_rmse"], "phase_nmse": ev["phase_nmse"],
+                                          "phase_rmse_detail_rad": ev["phase_rmse_detail"],
+                                          "align_shift_px": ev["align_shift"],
                                           "time_s": time.time() - t}
             recons[f"{name}_{label}"] = ev["phase"][roi].astype(np.float32)
             print(f"[{name}] {label:10s} phase RMSE={ev['phase_rmse']:.4f} rad  "
-                  f"NMSE={ev['phase_nmse']:.5f} ({time.time() - t:.0f}s)", flush=True)
+                  f"NMSE={ev['phase_nmse']:.5f} detail RMSE={ev['phase_rmse_detail']:.4f} "
+                  f"shift={np.round(ev['align_shift'], 2)} ({time.time() - t:.0f}s)", flush=True)
             save_json(results, "phase_results.json")
     np.savez_compressed(os.path.join(RESULTS, "phase_recons.npz"), **recons)
     print("done")

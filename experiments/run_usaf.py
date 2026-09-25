@@ -12,7 +12,7 @@ import numpy as np
 from common import (SimConfig, Simulator, FrameSpec, usaf_object, make_layout, acquisition_plan,
                     to_recon_frames, reconstruct, metrics, hr_window_origin, save_json, RESULTS,
                     HEIGHTS_HSSA, HEIGHTS_MFAP, K, CANVAS_HR)
-from hssa.recon import ReconFrame
+from hssa.recon import ReconFrame, estimate_tilts
 
 
 def main():
@@ -24,6 +24,8 @@ def main():
     args = ap.parse_args()
     os.makedirs(RESULTS, exist_ok=True)
     tag = "usaf_ideal" if args.ideal else "usaf"
+    if args.seed != 1:
+        tag += f"_s{args.seed}"
 
     cfg = SimConfig(seed=args.seed)
     if args.ideal:
@@ -121,6 +123,16 @@ def main():
     run("abl_HSSA_shift_instead_of_tilt", shifted)
     run("abl_MFAP_literal_update", [RF[(z, 0)] for z in HEIGHTS_MFAP], method="mfap", update="literal")
     run("abl_LISA_registered_no_angle", [RF[(HEIGHTS_HSSA[0], j)] for j in range(9)], method="mfap")
+
+    # 4) extension: tilt estimated from the registered shifts, tilted kernel
+    tilt9 = estimate_tilts(hssa9, [i for i in range(3) for _ in range(3)], [0, 3, 6],
+                           cfg.pixel, cfg.wavelength)
+    run("ext_HSSA_tilt_from_shift", tilt9, tilt="kernel")
+    for h, a in ((3, 2), (2, 3)):
+        sub = [hssa9[3 * i + j] for i in range(h) for j in range(a)]
+        sub = estimate_tilts(sub, [i for i in range(h) for _ in range(a)], [a * i for i in range(h)],
+                             cfg.pixel, cfg.wavelength)
+        run(f"ext_grid_h{h}_a{a}_tilt_from_shift", sub, tilt="kernel")
 
     np.savez_compressed(os.path.join(RESULTS, f"{tag}_recons.npz"), **recons,
                         origin=np.array(org), dx=dx)

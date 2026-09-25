@@ -21,6 +21,12 @@ Methods
  * mfap : the same parallel projection with p fixed to 1 (x = phi').
  * lisa : mfap with the known illumination angle in the propagation kernel
           (tilted angular spectrum) instead of a registered translation.
+
+`tilt="kernel"` (an extension, not in the paper) propagates every frame with
+the tilted kernel H(f + f0) and applies only the residual translation. With
+f0 estimated from the registered shifts (see estimate_tilts) it needs no
+angle calibration, like the paper, but models the non-paraxial defocus of
+oblique illumination that a normal-incidence kernel misses.
 """
 from dataclasses import dataclass
 import time
@@ -39,7 +45,10 @@ class ReconFrame:
 
 def reconstruct(frames, pixel=1.34, wavelength=0.532, k=2, canvas=2048,
                 method="hssa", iters=50, alpha=0.2, beta=0.7, gamma=0.05,
-                update="binned", init="sqrtI", verbose=False, callback=None):
+                update="binned", init="sqrtI", tilt=None, verbose=False, callback=None):
+    if tilt is None:
+        tilt = "kernel" if method == "lisa" else "shift"
+    use_f0 = tilt == "kernel"
     n_lr = frames[0].I.shape[0]
     W = n_lr * k
     dx = pixel / k
@@ -47,17 +56,15 @@ def reconstruct(frames, pixel=1.34, wavelength=0.532, k=2, canvas=2048,
     # per-frame kernels and windows
     ks, wins, targets = [], [], []
     for f in frames:
-        s = np.asarray(f.shift, float) * k             # HR pixels
+        # LISA knows the angles: the tilted kernel produces the displacement itself
+        s = np.zeros(2) if method == "lisa" else np.asarray(f.shift, float) * k   # HR pixels
         m = np.floor(s).astype(int)
         eps = s - m
         H = optics.asm_kernel((canvas, canvas), dx, wavelength, f.z,
-                              f0=f.f0 if method == "lisa" else (0.0, 0.0))
-        if method != "lisa":
-            H = H * optics.shift_kernel((canvas, canvas), 1.0, eps)
+                              f0=f.f0 if use_f0 else (0.0, 0.0))
+        H = H * optics.shift_kernel((canvas, canvas), 1.0, eps)
         ks.append(H)
         oy, ox = c0 - m[0], c0 - m[1]
-        if method == "lisa":
-            oy, ox = c0, c0
         assert 0 <= oy and oy + W <= canvas and 0 <= ox and ox + W <= canvas, "canvas too small"
         wins.append((slice(oy, oy + W), slice(ox, ox + W)))
         I = np.clip(f.I.astype(np.float32), 0, None)
@@ -111,3 +118,25 @@ def reconstruct(frames, pixel=1.34, wavelength=0.532, k=2, canvas=2048,
             print(f"  [{method}] iter {t:3d}  amp-err {hist[-1]:.5f}  {time.time() - t0:.1f}s")
     ref = wins[0]
     return {"x": x, "p": p, "phi": phi, "ref_window": ref, "err": np.array(hist), "dx": dx}
+
+
+def estimate_tilts(frames, heights, normal, pixel=1.34, wavelength=0.532):
+    """Tilt-aware frames from the registered shifts alone (no angle calibration).
+
+    frames: list of ReconFrame with autofocused z and registered shift.
+    heights: height index of each frame; normal: index of the on-axis frame of
+    each height index. For an oblique frame at the same physical height,
+    tan(theta) = (s - s_normal) * pixel / z_normal. The frame is then given the
+    normal frame's distance, the tilt f0 = direction cosines / lambda, and
+    the residual shift s_normal (the stage jitter of that height).
+    """
+    out = []
+    for f, h in zip(frames, heights):
+        fn = frames[normal[h]]
+        z = fn.z
+        ty = (f.shift[0] - fn.shift[0]) * pixel / z
+        tx = (f.shift[1] - fn.shift[1]) * pixel / z
+        norm = np.sqrt(1 + ty ** 2 + tx ** 2)
+        f0 = (ty / norm / wavelength, tx / norm / wavelength)
+        out.append(ReconFrame(f.I, z, fn.shift, f0))
+    return out
