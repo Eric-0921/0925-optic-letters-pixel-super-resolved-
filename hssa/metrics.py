@@ -12,13 +12,19 @@ def gt_on_hr(obj_fine, fine, k):
     return optics.bin_mean(obj_fine.real, b) + 1j * optics.bin_mean(obj_fine.imag, b)
 
 
-def align(rec, gt, crop=None, upsample=20):
-    """Sub-pixel translate `rec` onto `gt` using amplitude (or phase) correlation."""
+def align(rec, gt, crop=None, upsample=20, mode="amplitude"):
+    """Sub-pixel translate `rec` onto `gt` by cross-correlation.
+
+    mode="amplitude" correlates moduli; mode="phase" is for phase objects.
+    """
     a = np.abs(rec)
     g = np.abs(gt)
-    if g.std() < 1e-3:  # pure phase object: register the unit-modulus complex fields
-        a = rec / (np.abs(rec) + 1e-12)            # immune to phase wrapping
-        g = gt / (np.abs(gt) + 1e-12)
+    if mode == "phase":
+        # pure phase object: register high-passed unit-modulus fields. This is
+        # immune to phase wrapping and to the poorly recovered low-frequency
+        # phase, which otherwise dominates the correlation.
+        a = _highpass(rec)
+        g = _highpass(gt)
     if crop is not None:
         a, g = a[crop], g[crop]
     shift, _, _ = phase_cross_correlation(g - g.mean(), a - a.mean(), upsample_factor=upsample,
@@ -77,7 +83,7 @@ def evaluate_phase(rec_win, gt_win, roi_slice):
     Returns RMSE (rad), NMSE (error normalised by the ground-truth phase
     range) and the offset-corrected reconstructed phase.
     """
-    rec_al, shift = align(rec_win, gt_win, crop=roi_slice)
+    rec_al, shift = align(rec_win, gt_win, crop=roi_slice, mode="phase")
     r = rec_al[roi_slice]
     g = gt_win[roi_slice]
     c = np.sum(r * np.conj(g))
