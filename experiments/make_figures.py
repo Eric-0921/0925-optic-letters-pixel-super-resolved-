@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.ticker  # noqa: E402,F401
 
 from common import RESULTS, make_layout  # noqa: E402
 
@@ -107,7 +108,7 @@ def fig_phase():
     cols = [("gt", "ground truth"), ("LISA_1h9a", "LISA"), ("MFAP_9h1a", "MFAP"), ("HSSA_3h3a", "HSSA"),
             ("HSSA_tilt_kernel", "HSSA + tilted kernel")]
     cols = [c for c in cols if c[0] == "gt" or f"{imgs[0]}/{c[0]}" in res]
-    fig, axes = plt.subplots(2, len(cols), figsize=(2.5 * len(cols), 5.4))
+    fig, axes = plt.subplots(2, len(cols), figsize=(2.6 * len(cols), 6.6))
     for i, im in enumerate(imgs):
         g = d[f"{im}_gt"]
         lo, hi = g.min(), g.max()
@@ -122,7 +123,7 @@ def fig_phase():
                          f"detail RMSE {r.get('phase_rmse_detail_rad', float('nan')):.3f} rad")
             ax.set_title(title, fontsize=8)
     fig.suptitle("Pure-phase objects, 0 to pi rad (Supplement Fig. S1 analogue)", fontsize=10)
-    fig.tight_layout()
+    fig.tight_layout(h_pad=2.0)
     fig.savefig(os.path.join(RESULTS, "figS1_phase.png"), dpi=150)
     plt.close(fig)
 
@@ -176,6 +177,7 @@ def fig_seed_summary():
     ax.set_yticklabels([lab for _, lab in rows[::-1]], fontsize=8)
     ax.set_xlabel("MSE, groups 7-9 (dots: seeds, bar: mean)")
     ax.set_xlim(left=0)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(5))
     ax.grid(axis="x", color="#e4e3df", lw=0.6)
     ax.set_title(f"Realistic simulation, nine frames unless noted, {len(runs)} seeds", fontsize=9)
     fig.tight_layout()

@@ -64,6 +64,21 @@ def main():
         out += [f"| {k} | {v['phase_rmse_rad']:.4f} | {v['phase_nmse']:.5f} | "
                 f"{v.get('phase_rmse_detail_rad', float('nan')):.4f} |" for k, v in r.items()]
         out.append("")
+    ang = os.path.join(RESULTS, "angles_results.json")
+    if os.path.exists(ang):
+        r = json.load(open(ang))
+        seeds = sorted({k.split("/")[0] for k in r})
+        angs = sorted({float(k.split("/")[1][3:-3]) for k in r})
+        out += ["### Angle sweep (3 heights x 3 angles, realistic)", "",
+                "| Max angle | Method | " + " | ".join(f"MSE {s_}" for s_ in seeds) + " | Mean | Finest per seed |",
+                "|---|---|" + "---|" * len(seeds) + "---|---|"]
+        for a_ in angs:
+            for m in ("HSSA", "HSSA_tilt_from_shift"):
+                v = [r[f"{s_}/max{a_:g}deg/{m}"] for s_ in seeds]
+                out.append(f"| {a_:g} deg | {m} | " + " | ".join(f"{x['mse']:.4f}" for x in v) +
+                           f" | {np.mean([x['mse'] for x in v]):.4f} | " +
+                           ", ".join(x["finest"] or "none" for x in v) + " |")
+        out.append("")
     open(os.path.join(RESULTS, "summary.md"), "w").write("\n".join(out))
     print("\n".join(out))
 
