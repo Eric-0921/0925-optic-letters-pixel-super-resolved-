@@ -15,6 +15,7 @@ from skimage import data, color
 from common import (SimConfig, Simulator, acquisition_plan, to_recon_frames, reconstruct, metrics,
                     save_json, RESULTS, HEIGHTS_HSSA, HEIGHTS_MFAP, K, CANVAS_HR)
 from hssa.simulate import phase_object
+from hssa.recon import estimate_tilts
 
 
 def main():
@@ -47,10 +48,14 @@ def main():
             "LISA_1h9a": ([RF[(HEIGHTS_HSSA[0], j)] for j in range(9)], "lisa"),
             "MFAP_9h1a": ([RF[(z, 0)] for z in HEIGHTS_MFAP], "mfap"),
             "HSSA_3h3a": ([RF[(z, j)] for z in HEIGHTS_HSSA for j in range(3)], "hssa"),
+            "HSSA_tilt_kernel": (estimate_tilts([RF[(z, j)] for z in HEIGHTS_HSSA for j in range(3)],
+                                                [i for i in range(3) for _ in range(3)], [0, 3, 6],
+                                                cfg.pixel, cfg.wavelength), "hssa"),
         }
         for label, (rfs, method) in sets.items():
             t = time.time()
-            r = reconstruct(rfs, method=method, iters=args.iters)
+            kw = {"tilt": "kernel"} if label == "HSSA_tilt_kernel" else {}
+            r = reconstruct(rfs, method=method, iters=args.iters, **kw)
             ev = metrics.evaluate_phase(r["x"][r["ref_window"]], gtw, roi)
             results[f"{name}/{label}"] = {"phase_rmse_rad": ev["phase_rmse"], "phase_nmse": ev["phase_nmse"],
                                           "phase_rmse_detail_rad": ev["phase_rmse_detail"],
