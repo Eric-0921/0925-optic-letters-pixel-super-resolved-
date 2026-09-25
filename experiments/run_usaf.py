@@ -15,6 +15,13 @@ from common import (SimConfig, Simulator, FrameSpec, usaf_object, make_layout, a
 from hssa.recon import ReconFrame, estimate_tilts
 
 
+def lisa_frames(RF, z0):
+    """LISA knows the geometry: all nine frames share the on-axis frame's
+    autofocused distance (the geometric height) and use the known tilt."""
+    zref = RF[(z0, 0)].z
+    return [ReconFrame(RF[(z0, j)].I, zref, (0.0, 0.0), RF[(z0, j)].f0) for j in range(9)]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--iters", type=int, default=50)
@@ -110,7 +117,7 @@ def main():
             run(f"grid_h{h}_a{a}", rfs)
 
     # 2) Fig. 3: nine frames each
-    run("LISA_1h9a", [RF[(HEIGHTS_HSSA[0], j)] for j in range(9)], method="lisa")
+    run("LISA_1h9a", lisa_frames(RF, HEIGHTS_HSSA[0]), method="lisa")
     run("MFAP_9h1a", [RF[(z, 0)] for z in HEIGHTS_MFAP], method="mfap")
     hssa9 = [RF[(z, j)] for z in HEIGHTS_HSSA for j in range(3)]
     run("HSSA_3h3a", hssa9)

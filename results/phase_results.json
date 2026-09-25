@@ -7,7 +7,7 @@
       0.3,
       -0.6
     ],
-    "time_s": 53.86652898788452
+    "time_s": 74.0358521938324
   },
   "camera/MFAP_9h1a": {
     "phase_rmse_rad": 0.8522577906780957,
@@ -17,46 +17,6 @@
       0.35,
       -0.65
     ],
-    "time_s": 54.56827902793884
-  },
-  "camera/HSSA_3h3a": {
-    "phase_rmse_rad": 0.8567889623333125,
-    "phase_nmse": 0.07437864038086645,
-    "phase_rmse_detail_rad": 0.17887096985011114,
-    "align_shift_px": [
-      0.15,
-      -0.7
-    ],
-    "time_s": 62.723764419555664
-  },
-  "astronaut/LISA_1h9a": {
-    "phase_rmse_rad": 0.8985710652966695,
-    "phase_nmse": 0.08180975919346446,
-    "phase_rmse_detail_rad": 0.27814310822130156,
-    "align_shift_px": [
-      0.5,
-      0.15
-    ],
-    "time_s": 51.40699338912964
-  },
-  "astronaut/MFAP_9h1a": {
-    "phase_rmse_rad": 0.8057405257457695,
-    "phase_nmse": 0.0657795154137078,
-    "phase_rmse_detail_rad": 0.21508497020393144,
-    "align_shift_px": [
-      0.55,
-      0.25
-    ],
-    "time_s": 53.34954619407654
-  },
-  "astronaut/HSSA_3h3a": {
-    "phase_rmse_rad": 0.8144577362152683,
-    "phase_nmse": 0.06721053622040424,
-    "phase_rmse_detail_rad": 0.23020179109533187,
-    "align_shift_px": [
-      0.35,
-      0.25
-    ],
-    "time_s": 59.82901096343994
+    "time_s": 60.14700794219971
   }
 }

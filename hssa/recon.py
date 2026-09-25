@@ -120,7 +120,7 @@ def reconstruct(frames, pixel=1.34, wavelength=0.532, k=2, canvas=2048,
     return {"x": x, "p": p, "phi": phi, "ref_window": ref, "err": np.array(hist), "dx": dx}
 
 
-def estimate_tilts(frames, heights, normal, pixel=1.34, wavelength=0.532):
+def estimate_tilts(frames, heights, normal, pixel=1.34, wavelength=0.532, guard_um=30.0):
     """Tilt-aware frames from the registered shifts alone (no angle calibration).
 
     frames: list of ReconFrame with autofocused z and registered shift.
@@ -128,12 +128,21 @@ def estimate_tilts(frames, heights, normal, pixel=1.34, wavelength=0.532):
     each height index. For an oblique frame at the same physical height,
     tan(theta) = (s - s_normal) * pixel / z_normal. The frame is then given the
     normal frame's distance, the tilt f0 = direction cosines / lambda, and
-    the residual shift s_normal (the stage jitter of that height).
+    the residual shift s_normal (the stage jitter of that height). If the
+    normal frame's autofocus is more than guard_um away from the median of
+    its height group, the median is used instead.
     """
+    # robust per-height distance: the normal frame's autofocus unless it is an
+    # outlier (> guard_um from the median of all frames at that height)
+    zh = {}
+    for h in set(heights):
+        zs = [f.z for f, hh in zip(frames, heights) if hh == h]
+        zn = frames[normal[h]].z
+        zh[h] = zn if abs(zn - np.median(zs)) <= guard_um else float(np.median(zs))
     out = []
     for f, h in zip(frames, heights):
         fn = frames[normal[h]]
-        z = fn.z
+        z = zh[h]
         ty = (f.shift[0] - fn.shift[0]) * pixel / z
         tx = (f.shift[1] - fn.shift[1]) * pixel / z
         norm = np.sqrt(1 + ty ** 2 + tx ** 2)
